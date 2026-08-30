@@ -8,6 +8,21 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 if (!ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not set");
 }
+var ContentType;
+(function (ContentType) {
+    ContentType["TEXT"] = "text";
+    ContentType["THINKING"] = "thinking";
+    ContentType["REDACTED_THINKING"] = "redacted_thinking";
+    ContentType["TOOL_USE"] = "tool_use";
+    ContentType["SERVER_TOOL_USE"] = "server_tool_use";
+    ContentType["WEB_SEARCH_TOOL_RESULT"] = "web_search_tool_result";
+    ContentType["WEB_FETCH_TOOL_RESULT"] = "web_fetch_tool_result";
+    ContentType["CODE_EXECUTION_TOOL_RESULT"] = "code_execution_tool_result";
+    ContentType["BASH_CODE_EXECUTION_TOOL_RESULT"] = "bash_code_execution_tool_result";
+    ContentType["TEXT_EDITOR_CODE_EXECUTION_TOOL_RESULT"] = "text_editor_code_execution_tool_result";
+    ContentType["TOOL_SEARCH_TOOL_RESULT"] = "tool_search_tool_result";
+    ContentType["CONTAINER_UPLOAD"] = "container_upload";
+})(ContentType || (ContentType = {}));
 class MCPClient {
     mcp;
     anthropic;
@@ -37,8 +52,8 @@ class MCPClient {
                 args: [serverScriptPath],
             });
             await this.mcp.connect(this.transport);
-            const toolsResult = await this.mcp.listTools();
-            this.tools = toolsResult.tools.map((tool) => {
+            const availableTools = await this.mcp.listTools();
+            this.tools = availableTools.tools.map((tool) => {
                 return {
                     name: tool.name,
                     description: tool.description,
@@ -63,25 +78,29 @@ class MCPClient {
             messages: this.messages,
             tools: this.tools,
         });
-        const finalText = [];
+        const outputText = [];
         const tool_result = [];
         for (const content of response.content) {
-            if (content.type === "text") {
-                finalText.push(content.text);
+            if (content.type === ContentType.TEXT) {
+                outputText.push(content.text);
+                this.messages.push({
+                    role: "assistant",
+                    content: content.text,
+                });
             }
-            else if (content.type === "tool_use") {
+            else if (content.type === ContentType.TOOL_USE) {
                 const toolName = content.name;
                 const toolArgs = content.input;
                 const result = await this.mcp.callTool({
                     name: toolName,
                     arguments: toolArgs,
                 });
-                finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
+                outputText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
                 tool_result.push({
                     type: "tool_result",
                     tool_use_id: content.id,
                     content: "\n".concat(result.content
-                        .filter((block) => block.type === "text")
+                        .filter((block) => block.type === ContentType.TEXT)
                         .map((block) => block.text)
                         .join("\n")),
                 });
@@ -103,12 +122,12 @@ class MCPClient {
                 tools: this.tools,
             });
             for (const content of response.content) {
-                if (content.type === "text") {
-                    finalText.push(content.text);
+                if (content.type === ContentType.TEXT) {
+                    outputText.push(content.text);
                 }
             }
         }
-        return finalText.join("\n");
+        return outputText.join("\n");
     }
     async chatLoop() {
         const rl = readline.createInterface({
