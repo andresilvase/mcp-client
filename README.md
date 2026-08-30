@@ -66,12 +66,54 @@ Or directly with Node:
 node build/index.js <path_to_server_script>
 ```
 
-### Example
+### Connecting to Weather MCP Server
+
+The Weather MCP Server provides real-time weather data and alerts from the National Weather Service API.
+
+#### Prerequisites
+
+1. Clone the weather-mcp repository:
+```bash
+git clone https://github.com/andresilvase/weather-mcp.git
+cd weather-mcp
+```
+
+2. Install dependencies and build:
+```bash
+npm install
+npm run build
+```
+
+The compiled server will be available at `weather-mcp/build/index.js`.
+
+#### Available Tools
+
+The Weather MCP Server provides the following tools:
+
+- **`get_forecast`** - Returns the weather forecast for a geographic location
+  - Input: `latitude` (number -90 to 90), `longitude` (number -180 to 180)
+  - Returns: Detailed weather forecast data
+
+- **`get_alerts`** - Returns active weather alerts for a US state
+  - Input: `state` (two-letter state code, e.g., `CA`, `NY`)
+  - Returns: Active weather alerts for the specified state
+
+#### Starting the Client
 
 ```bash
-# Connect to a local weather MCP server
-node build/index.js ~/Desktop/weather-mcp/build/index.js
+# Build this project first
+npm run build
+
+# Connect to weather-mcp server
+node build/index.js ~/path/to/weather-mcp/build/index.js
 ```
+
+Or use the npm start script (update the path in package.json as needed):
+```bash
+npm start
+```
+
+#### Interactive Usage
 
 Once connected, you'll enter an interactive chat loop:
 
@@ -79,12 +121,23 @@ Once connected, you'll enter an interactive chat loop:
 MCP Client Started!
 Type your queries or 'quit' to exit.
 
-Query: What's the current weather in New York?
-[Calling tool weather_get with args {"city":"New York"}]
-The current weather in New York is...
+Query: What's the weather forecast for San Francisco (latitude: 37.7749, longitude: -122.4194)?
+[Calling tool get_forecast with args {"latitude":37.7749,"longitude":-122.4194}]
+The weather forecast for San Francisco shows...
+
+Query: What weather alerts are active in California?
+[Calling tool get_alerts with args {"state":"CA"}]
+Current weather alerts for CA...
 
 Query: quit
 ```
+
+#### Example Queries
+
+- "Get the weather forecast for New York City (latitude: 40.7128, longitude: -74.0060)"
+- "What alerts are active in Florida?"
+- "Show me the forecast for Seattle (latitude: 47.6062, longitude: -122.3321)"
+- "Are there any weather alerts in Texas?"
 
 ## How It Works
 
