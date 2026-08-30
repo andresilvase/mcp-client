@@ -15,13 +15,27 @@ if (!ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not set");
 }
 
+enum ContentType {
+    TEXT = "text",
+    THINKING = "thinking",
+    REDACTED_THINKING = "redacted_thinking",
+    TOOL_USE = "tool_use",
+    SERVER_TOOL_USE = "server_tool_use",
+    WEB_SEARCH_TOOL_RESULT = "web_search_tool_result",
+    WEB_FETCH_TOOL_RESULT = "web_fetch_tool_result",
+    CODE_EXECUTION_TOOL_RESULT = "code_execution_tool_result",
+    BASH_CODE_EXECUTION_TOOL_RESULT = "bash_code_execution_tool_result",
+    TEXT_EDITOR_CODE_EXECUTION_TOOL_RESULT = "text_editor_code_execution_tool_result",
+    TOOL_SEARCH_TOOL_RESULT = "tool_search_tool_result",
+    CONTAINER_UPLOAD = "container_upload",
+}
+
 class MCPClient {
     private mcp: Client;
     private anthropic: Anthropic;
     private transport: StdioClientTransport | null = null;
     private tools: Tool[] = [];
     private messages: MessageParam[] = [];
-
 
     constructor() {
         this.anthropic = new Anthropic({
@@ -34,9 +48,11 @@ class MCPClient {
         try {
             const isJs = serverScriptPath.endsWith(".js");
             const isPy = serverScriptPath.endsWith(".py");
+
             if (!isJs && !isPy) {
                 throw new Error("Server script must be a .js or .py file");
             }
+
             const command = isPy
                 ? process.platform === "win32"
                     ? "python"
@@ -50,19 +66,21 @@ class MCPClient {
 
             await this.mcp.connect(this.transport);
 
-            const toolsResult = await this.mcp.listTools();
+            const availableTools = await this.mcp.listTools();
 
-            this.tools = toolsResult.tools.map((tool) => {
+            this.tools = availableTools.tools.map((tool) => {
                 return {
                     name: tool.name,
                     description: tool.description,
                     input_schema: tool.inputSchema,
                 };
             });
+
             console.log(
                 "Connected to server with tools:",
                 this.tools.map(({ name }) => name)
             );
+
         } catch (e) {
             console.log("Failed to connect to MCP server: ", e);
             throw e;
@@ -76,7 +94,6 @@ class MCPClient {
             content: query,
         });
 
-
         var response = await this.anthropic.messages.create({
             model: "claude-opus-5",
             max_tokens: 1000,
@@ -84,13 +101,13 @@ class MCPClient {
             tools: this.tools,
         });
 
-        const finalText = [];
+        const outputText = [];
         const tool_result: Anthropic.ContentBlockParam[] = [];
 
         for (const content of response.content) {
-            if (content.type === "text") {
-                finalText.push(content.text);
-            } else if (content.type === "tool_use") {
+            if (content.type === ContentType.TEXT) {
+                outputText.push(content.text);
+            } else if (content.type === ContentType.TOOL_USE) {
                 const toolName = content.name;
                 const toolArgs = content.input as { [x: string]: unknown } | undefined;
 
@@ -98,7 +115,8 @@ class MCPClient {
                     name: toolName,
                     arguments: toolArgs,
                 });
-                finalText.push(
+
+                outputText.push(
                     `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`
                 );
 
@@ -107,7 +125,7 @@ class MCPClient {
                     tool_use_id: content.id,
                     content: "\n".concat(
                         result.content
-                            .filter((block) => block.type === "text")
+                            .filter((block) => block.type === ContentType.TEXT)
                             .map((block) => block.text)
                             .join("\n")
                     ),
@@ -120,6 +138,7 @@ class MCPClient {
                 role: "assistant",
                 content: response.content
             })
+
             this.messages.push({
                 role: "user",
                 content: tool_result
@@ -133,13 +152,13 @@ class MCPClient {
             });
 
             for (const content of response.content) {
-                if (content.type === "text") {
-                    finalText.push(content.text);
+                if (content.type === ContentType.TEXT) {
+                    outputText.push(content.text);
                 }
             }
         }
 
-        return finalText.join("\n");
+        return outputText.join("\n");
     }
 
     async chatLoop() {
