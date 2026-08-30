@@ -107,6 +107,11 @@ class MCPClient {
         for (const content of response.content) {
             if (content.type === ContentType.TEXT) {
                 outputText.push(content.text);
+
+                this.messages.push({
+                    role: "assistant",
+                    content: content.text,
+                });
             } else if (content.type === ContentType.TOOL_USE) {
                 const toolName = content.name;
                 const toolArgs = content.input as { [x: string]: unknown } | undefined;
