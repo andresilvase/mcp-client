@@ -22,7 +22,7 @@ The client establishes connections to MCP servers (Node.js or Python), discovers
 1. Clone the repository:
 ```bash
 git clone <repository-url>
-cd andresilvase-mcp
+cd weather-mcp-client
 ```
 
 2. Install dependencies:
