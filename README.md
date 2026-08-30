@@ -1,4 +1,4 @@
-# MCP Client CLI
+# Weather MCP Client - Chat CLI
 
 A command-line interface for interacting with Claude AI through the Model Context Protocol (MCP). This client connects to MCP servers and enables Claude to use their tools seamlessly.
 
