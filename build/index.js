@@ -72,11 +72,11 @@ class MCPClient {
         for (const tool of toolUse) {
             const toolName = tool.name;
             const toolArgs = tool.input;
+            onToolCallback?.(toolName, toolArgs);
             const result = await this.mcp.callTool({
                 name: toolName,
                 arguments: toolArgs,
             });
-            onToolCallback?.(toolName, toolArgs);
             tool_result.push({
                 type: "tool_result",
                 tool_use_id: tool.id,
