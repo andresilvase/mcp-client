@@ -87,6 +87,35 @@ class MCPClient {
         }
     }
 
+    async executeToolUse(toolUse: Anthropic.Messages.ToolUseBlock[], onToolCallback?: (toolName: string, toolArgs: { [x: string]: unknown } | undefined) => void) {
+        const tool_result: Anthropic.Messages.ContentBlockParam[] = [];
+
+        for (const tool of toolUse) {
+            const toolName = tool.name;
+            const toolArgs = tool.input as { [x: string]: unknown } | undefined;
+
+            onToolCallback?.(toolName, toolArgs);
+
+            const result = await this.mcp.callTool({
+                name: toolName,
+                arguments: toolArgs,
+            });
+
+            tool_result.push({
+                type: "tool_result",
+                tool_use_id: tool.id,
+                content: "\n".concat(
+                    result.content
+                        .filter((block) => block.type === ContentType.TEXT)
+                        .map((block) => block.text)
+                        .join("\n")
+                ),
+            });
+        }
+
+        return tool_result;
+    }
+
     async processQuery(query: string) {
 
         this.messages.push({
@@ -94,11 +123,16 @@ class MCPClient {
             content: query,
         });
 
-        var response = await this.anthropic.messages.create({
+        const response = await this.anthropic.messages.create({
             model: "claude-opus-5",
             max_tokens: 1000,
             messages: this.messages,
             tools: this.tools,
+        });
+
+        this.messages.push({
+            role: "assistant",
+            content: response.content
         });
 
         const outputText = [];
@@ -107,59 +141,53 @@ class MCPClient {
         for (const content of response.content) {
             if (content.type === ContentType.TEXT) {
                 outputText.push(content.text);
-
-                this.messages.push({
-                    role: "assistant",
-                    content: content.text,
-                });
             } else if (content.type === ContentType.TOOL_USE) {
-                const toolName = content.name;
-                const toolArgs = content.input as { [x: string]: unknown } | undefined;
 
-                const result = await this.mcp.callTool({
-                    name: toolName,
-                    arguments: toolArgs,
-                });
-
-                outputText.push(
-                    `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`
-                );
-
-                tool_result.push({
-                    type: "tool_result",
-                    tool_use_id: content.id,
-                    content: "\n".concat(
-                        result.content
-                            .filter((block) => block.type === ContentType.TEXT)
-                            .map((block) => block.text)
-                            .join("\n")
-                    ),
-                });
+                tool_result.push(...(await this.executeToolUse([content], (toolName, toolArgs) => {
+                    outputText.push(
+                        `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`
+                    );
+                })));
             }
         }
 
         if (tool_result.length > 0) {
-            this.messages.push({
-                role: "assistant",
-                content: response.content
-            })
 
             this.messages.push({
                 role: "user",
                 content: tool_result
             });
 
-            response = await this.anthropic.messages.create({
-                model: "claude-opus-5",
-                max_tokens: 1000,
-                messages: this.messages,
-                tools: this.tools,
-            });
+            while (true) {
+                const response = await this.anthropic.messages.create({
+                    model: "claude-opus-5",
+                    max_tokens: 1000,
+                    messages: this.messages,
+                    tools: this.tools,
+                });
 
-            for (const content of response.content) {
-                if (content.type === ContentType.TEXT) {
-                    outputText.push(content.text);
+                this.messages.push({
+                    role: "assistant",
+                    content: response.content
+                })
+
+                const toolUses = response.content.filter((block) => block.type === ContentType.TOOL_USE);
+
+                if (toolUses.length === 0) {
+                    for (const content of response.content) {
+                        if (content.type === ContentType.TEXT) {
+                            outputText.push(content.text);
+                        }
+                    }
+                    break;
                 }
+
+                const toolResults = await this.executeToolUse(toolUses as Anthropic.Messages.ToolUseBlock[]);
+
+                this.messages.push({
+                    role: "user",
+                    content: toolResults
+                })
             }
         }
 
