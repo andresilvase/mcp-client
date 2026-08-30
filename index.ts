@@ -94,12 +94,13 @@ class MCPClient {
             const toolName = tool.name;
             const toolArgs = tool.input as { [x: string]: unknown } | undefined;
 
-            onToolCallback?.(toolName, toolArgs);
 
             const result = await this.mcp.callTool({
                 name: toolName,
                 arguments: toolArgs,
             });
+
+            onToolCallback?.(toolName, toolArgs);
 
             tool_result.push({
                 type: "tool_result",
@@ -182,7 +183,11 @@ class MCPClient {
                     break;
                 }
 
-                const toolResults = await this.executeToolUse(toolUses as Anthropic.Messages.ToolUseBlock[]);
+                const toolResults = await this.executeToolUse(toolUses as Anthropic.Messages.ToolUseBlock[], (toolName, toolArgs) => {
+                    outputText.push(
+                        `[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`
+                    );
+                });
 
                 this.messages.push({
                     role: "user",
